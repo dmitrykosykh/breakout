@@ -16,7 +16,8 @@
     },
     "rules": {
         "max-len": "off",
-        "no-unused-vars": "off"
+        "no-unused-vars": "off",
+        "no-use-before-define": "off"
     },
     "parser": "babel-eslint"
 }

@@ -31,6 +31,7 @@ const gameState = {
   numberOfBricksRow: 5,
   numberOfBricksColumn: 9,
   bricks: [],
+  numberOfDestroyedBricks: 0,
   paddle: {
     width: 120,
     height: 10,
@@ -41,6 +42,13 @@ const gameState = {
     velocity: 30,
     xSpeed: undefined,
   },
+  score: 0,
+  lives: 3,
+  animationFrameId: undefined,
+  isGameComplete: false,
+  isGameOver: false,
+  isGameStopped: false,
+  isLifeCrashed: false,
 };
 
 const setupBallState = () => {
@@ -91,11 +99,6 @@ const renderBall = () => {
   gameState.gameSpace.context.closePath();
 };
 
-const updateBallState = () => {
-  gameState.ball.position.x += gameState.ball.xSpeed;
-  gameState.ball.position.y += gameState.ball.ySpeed;
-};
-
 const detectBorderGameSpaceCollision = () => {
   const isLeftCollision = () => gameState.ball.position.x - gameState.ball.radius < 0;
 
@@ -111,6 +114,13 @@ const detectBorderGameSpaceCollision = () => {
     gameState.ball.xSpeed = -gameState.ball.xSpeed;
   } else if (isTopCollision()) {
     gameState.ball.ySpeed = -gameState.ball.ySpeed;
+  } else if (isBottomCollision()) {
+    gameState.lives -= 1;
+    if (gameState.lives < 1) {
+      gameState.isLifeCrashed = false;
+    } else {
+      gameState.isLifeCrashed = true;
+    }
   }
 };
 
@@ -131,6 +141,8 @@ const detectBrickCollision = () => {
     && !gameState.bricks[index].isDestroyed) {
       gameState.ball.ySpeed = -gameState.ball.ySpeed;
       gameState.bricks[index].isDestroyed = true;
+      gameState.score += 1;
+      gameState.numberOfDestroyedBricks += 1;
     }
   }
 };
@@ -153,8 +165,22 @@ const detectCollision = () => {
   detectBorderGameSpaceCollision();
 };
 
+const updateStageGameState = () => {
+  if (gameState.lives < 1) {
+    gameState.isGameOver = true;
+  } else if (gameState.numberOfDestroyedBricks === gameState.bricks.length) {
+    gameState.isGameComplete = true;
+  }
+};
+
+const updateBallState = () => {
+  gameState.ball.position.x += gameState.ball.xSpeed;
+  gameState.ball.position.y += gameState.ball.ySpeed;
+};
+
 const updateGameState = () => {
   updateBallState();
+  updateStageGameState();
   detectCollision();
 };
 
@@ -189,20 +215,93 @@ const renderPaddle = () => {
   gameState.gameSpace.context.closePath();
 };
 
+const renderGameOver = () => {
+  gameState.gameSpace.context.font = '30px Arial';
+  gameState.gameSpace.context.fillStyle = '#ff3300';
+  gameState.gameSpace.context.fillText('GAME OVER', gameState.gameSpace.canvas.width / 2 - 100, gameState.gameSpace.canvas.height / 2);
+};
+
+const renderScore = () => {
+  gameState.gameSpace.context.font = '18px Arial';
+  gameState.gameSpace.context.fillStyle = '#790c5a';
+  gameState.gameSpace.context.fillText(`Score: ${gameState.score}`, 30, 25);
+};
+
+const renderLives = () => {
+  gameState.gameSpace.context.font = '18px Arial';
+  gameState.gameSpace.context.fillStyle = '#d63447';
+  gameState.gameSpace.context.fillText(`Lives: ${gameState.lives}`, gameState.gameSpace.canvas.width - 95, 25);
+};
+
+const renderCrashedLife = () => {
+  gameState.gameSpace.context.font = '30px Arial';
+  gameState.gameSpace.context.fillStyle = '#ff3300';
+  gameState.gameSpace.context.fillText('You lost one life. Press the space key to continue the game', 200, gameState.gameSpace.canvas.height / 2);
+};
+
+const continueGameFromCrashedLifeHandler = (event) => {
+  if (event.code === 'Space') {
+    document.removeEventListener('keydown', continueGameFromCrashedLifeHandler);
+    setupPaddleState();
+    setupBallState();
+    gameState.isLifeCrashed = false;
+    render();
+  }
+};
+
+const renderGameComplete = () => {
+  gameState.gameSpace.context.font = '18px Arial';
+  gameState.gameSpace.context.fillStyle = '#940CFE';
+  gameState.gameSpace.context.fillText(`You won\n You scored ${gameState.score} points`, gameState.gameSpace.canvas.width / 2 - 100, gameState.gameSpace.canvas.height / 2);
+};
+
+const renderGameStop = () => {
+  gameState.gameSpace.context.font = '18px Arial';
+  gameState.gameSpace.context.fillStyle = '#940CFE';
+  gameState.gameSpace.context.fillText('The game is stopped. Press the Space key to continue game', gameState.gameSpace.canvas.width / 2 - 100, gameState.gameSpace.canvas.height / 2);
+};
+
 const render = () => {
   clearGameSpace();
   renderBall();
   renderBricks();
   renderPaddle();
+  renderScore();
+  renderLives();
   updateGameState();
-  window.requestAnimationFrame(render);
+  if (gameState.isGameOver) {
+    window.cancelAnimationFrame(gameState.animationFrame);
+    renderGameOver();
+  } else if (gameState.isLifeCrashed) {
+    window.cancelAnimationFrame(gameState.animationFrame);
+    renderCrashedLife();
+    document.addEventListener('keydown', continueGameFromCrashedLifeHandler);
+  } else if (gameState.isGameComplete) {
+    window.cancelAnimationFrame(gameState.animationFrame);
+    renderGameComplete();
+  } else if (gameState.isGameStopped) {
+    window.cancelAnimationFrame(gameState.animationFrame);
+    renderGameStop();
+  } else {
+    gameState.animationFrameId = window.requestAnimationFrame(render);
+  }
 };
 
-const processInput = () => {
+const stopContinueGameHandler = (event) => {
+  if (event.code === 'Space' && gameState.isGameStopped && !gameState.isGameComplete && !gameState.isGameOver && !gameState.isLifeCrashed) {
+    gameState.isGameStopped = false;
+    render();
+  } else if (event.code === 'Space' && !gameState.isGameStopped && !gameState.isGameComplete && !gameState.isGameOver && !gameState.isLifeCrashed) {
+    gameState.isGameStopped = true;
+  }
+};
+
+const setupInput = () => {
   const isLeftBorder = () => gameState.paddle.position.x <= 0;
 
   const isRightBorder = () => gameState.paddle.position.x + gameState.paddle.width >= gameState.gameSpace.canvas.width;
 
+  document.addEventListener('keydown', stopContinueGameHandler, false);
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Right' || event.key === 'ArrowRight') {
@@ -229,9 +328,9 @@ const processInput = () => {
 };
 
 const startGameLoop = () => {
-  processInput();
+  setupInput();
   setupGameState();
-  window.requestAnimationFrame(render);
+  render();
 };
 
 startGameLoop();
