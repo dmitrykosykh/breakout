@@ -1,0 +1,10 @@
+#gameSpace {
+  border: 1px solid black;
+  background-color: white;
+
+}
+
+.container {
+  display: flex;
+  justify-content: center;
+}
